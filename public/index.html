@@ -326,8 +326,9 @@
     </div>
 
     <script>
-        // API endpoint - Replace with your Render backend URL
-        const API_URL = 'https://best-cart-deal-calculator.onrender.com';
+        // API endpoint - works for both development and production
+        const API_URL = 'https://best-cart-deal-calculator.onrender.com/best-deal';
+
         
         /**
          * Add a new cart item input field
@@ -488,8 +489,7 @@
                 // Collect and validate form data
                 const data = collectFormData();
                 
-                // Make API call with better error handling
-                // Make API call with better error handling
+                // Make API call
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
@@ -498,44 +498,11 @@
                     body: JSON.stringify(data)
                 });
                 
-                // Check if response is ok before trying to parse JSON
-                // Check if response is ok before trying to parse JSON
+                const result = await response.json();
+                
                 if (!response.ok) {
-                    // Try to get error message from response
-                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.error || errorMessage;
-                    } catch (e) {
-                        // If JSON parsing fails, use the HTTP status message
-                    }
-                    throw new Error(errorMessage);
+                    throw new Error(result.error || 'Failed to calculate best deal');
                 }
-                
-                // Check if response has content
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('Server did not return JSON response');
-                    // Try to get error message from response
-                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.error || errorMessage;
-                    } catch (e) {
-                        // If JSON parsing fails, use the HTTP status message
-                    }
-                    throw new Error(errorMessage);
-                }
-                
-                // Check if response has content
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('Server did not return JSON response');
-                }
-                
-                const result = await response.json();
-                
-                const result = await response.json();
                 
                 // Display success result
                 resultDiv.className = 'result success';
@@ -560,24 +527,10 @@
                 resultDiv.style.display = 'block';
                 
             } catch (error) {
-                // Display error with more details
-                // Display error with more details
+                // Display error
                 resultDiv.className = 'result error';
                 resultHeader.innerHTML = '❌ Error';
-                
-                let errorMessage = error.message;
-                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMessage = 'Cannot connect to the backend server. Please check if the Render backend is running and the URL is correct.';
-                }
-                
-                resultContent.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
-                
-                let errorMessage = error.message;
-                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMessage = 'Cannot connect to the backend server. Please check if the Render backend is running and the URL is correct.';
-                }
-                
-                resultContent.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
+                resultContent.innerHTML = `<strong>Error:</strong> ${error.message}`;
                 resultDiv.style.display = 'block';
                 
                 console.error('Error:', error);
