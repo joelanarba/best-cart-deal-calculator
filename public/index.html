@@ -326,8 +326,8 @@
     </div>
 
     <script>
-        // API endpoint - works for both development and production
-        const API_URL = window.location.origin + '/best-deal';
+        // API endpoint - Replace with your Render backend URL
+        const API_URL = 'https://your-render-app-name.onrender.com/best-deal';
         
         /**
          * Add a new cart item input field
@@ -488,7 +488,7 @@
                 // Collect and validate form data
                 const data = collectFormData();
                 
-                // Make API call
+                // Make API call with better error handling
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
@@ -497,11 +497,26 @@
                     body: JSON.stringify(data)
                 });
                 
-                const result = await response.json();
-                
+                // Check if response is ok before trying to parse JSON
                 if (!response.ok) {
-                    throw new Error(result.error || 'Failed to calculate best deal');
+                    // Try to get error message from response
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch (e) {
+                        // If JSON parsing fails, use the HTTP status message
+                    }
+                    throw new Error(errorMessage);
                 }
+                
+                // Check if response has content
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server did not return JSON response');
+                }
+                
+                const result = await response.json();
                 
                 // Display success result
                 resultDiv.className = 'result success';
@@ -526,10 +541,16 @@
                 resultDiv.style.display = 'block';
                 
             } catch (error) {
-                // Display error
+                // Display error with more details
                 resultDiv.className = 'result error';
                 resultHeader.innerHTML = '❌ Error';
-                resultContent.innerHTML = `<strong>Error:</strong> ${error.message}`;
+                
+                let errorMessage = error.message;
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMessage = 'Cannot connect to the backend server. Please check if the Render backend is running and the URL is correct.';
+                }
+                
+                resultContent.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
                 resultDiv.style.display = 'block';
                 
                 console.error('Error:', error);
@@ -570,7 +591,7 @@
             if (e.target.type === 'text') {
                 setTimeout(updateVendorItems, 100); // Small delay to allow input to update
             }
-        });
+        }
     </script>
 </body>
 </html>
