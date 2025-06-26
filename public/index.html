@@ -473,9 +473,9 @@
     </div>
 
     <script>
-        // API endpoint - works for both development and production
+        // API endpoint - dynamically uses current protocol for localhost
         const API_URL = window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000/best-deal'
+            ? `${window.location.protocol}//localhost:3000/best-deal`
             : 'https://best-cart-deal-calculator.onrender.com/best-deal';
 
         
