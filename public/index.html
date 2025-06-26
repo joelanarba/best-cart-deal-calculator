@@ -18,7 +18,7 @@
         }
         
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -53,6 +53,7 @@
             border: 2px solid #f0f0f0;
             border-radius: 10px;
             background: #fafafa;
+            position: relative;
         }
         
         .section h3 {
@@ -107,6 +108,12 @@
             transform: translateY(-2px);
         }
         
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .btn-add {
             background: #4CAF50;
         }
@@ -123,6 +130,14 @@
         
         .btn-remove:hover {
             background: #d32f2f;
+        }
+        
+        .btn-clear {
+            background: #FF9800;
+        }
+        
+        .btn-clear:hover {
+            background: #F57C00;
         }
         
         .btn-calculate {
@@ -226,6 +241,61 @@
             border-radius: 8px;
         }
         
+        .comparison-table {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.6);
+        }
+        
+        .comparison-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .comparison-row:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid rgba(255,255,255,0.5);
+        }
+        
+        .vendor-name {
+            font-weight: 600;
+        }
+        
+        .vendor-total {
+            font-weight: bold;
+        }
+        
+        .optimal-badge {
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        
+        .savings-alert {
+            margin-top: 15px;
+            padding: 15px;
+            background: linear-gradient(45deg, #FFE082, #FFCC02);
+            border: 2px solid #FFA000;
+            border-radius: 8px;
+            color: #E65100;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
         .loading {
             display: none;
             text-align: center;
@@ -249,6 +319,73 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 14px;
+            font-weight: normal;
+        }
+        
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .clear-section {
+            text-align: right;
+            margin-bottom: 15px;
+        }
+        
+        .selected-vendor {
+            background: rgba(76, 175, 80, 0.1);
+            border: 2px solid #4CAF50 !important;
+        }
+        
+        @media (max-width: 768px) {
+            .comparison-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            
+            .vendor-header {
+                flex-direction: column;
+            }
+            
+            .vendor-items {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -262,6 +399,9 @@
             <!-- Shopping Cart Items Section -->
             <div class="section">
                 <h3>🛍️ Shopping Cart Items</h3>
+                <div class="clear-section">
+                    <button class="btn btn-clear" onclick="clearAllItems()">🗑️ Clear All Items</button>
+                </div>
                 <div id="cartItems">
                     <div class="item-row">
                         <input type="text" placeholder="Enter item name..." value="Laptop">
@@ -281,7 +421,14 @@
             
             <!-- Vendors Section -->
             <div class="section">
-                <h3>🏪 Vendors</h3>
+                <h3>🏪 Vendors 
+                    <span class="tooltip">ℹ️
+                        <span class="tooltiptext">Shipping fee is charged once per vendor, regardless of how many items you buy from them</span>
+                    </span>
+                </h3>
+                <div class="clear-section">
+                    <button class="btn btn-clear" onclick="clearAllVendors()">🗑️ Clear All Vendors</button>
+                </div>
                 <div id="vendors">
                     <!-- Vendor 1 -->
                     <div class="vendor-section">
@@ -327,7 +474,9 @@
 
     <script>
         // API endpoint - works for both development and production
-        const API_URL = 'https://best-cart-deal-calculator.onrender.com/best-deal';
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000/best-deal'
+            : 'https://best-cart-deal-calculator.onrender.com/best-deal';
 
         
         /**
@@ -350,6 +499,16 @@
          */
         function removeCartItem(button) {
             button.parentElement.remove();
+            updateVendorItems();
+        }
+        
+        /**
+         * Clear all cart items
+         */
+        function clearAllItems() {
+            const cartItems = document.getElementById('cartItems');
+            cartItems.innerHTML = '';
+            addCartItem(); // Add one empty item
             updateVendorItems();
         }
         
@@ -377,6 +536,15 @@
          */
         function removeVendor(button) {
             button.closest('.vendor-section').remove();
+        }
+        
+        /**
+         * Clear all vendors
+         */
+        function clearAllVendors() {
+            const vendors = document.getElementById('vendors');
+            vendors.innerHTML = '';
+            addVendor(); // Add one empty vendor
         }
         
         /**
@@ -416,13 +584,20 @@
         }
         
         /**
+         * Sanitize and validate input data
+         */
+        function sanitizeInput(str) {
+            return str.trim().replace(/[<>]/g, '');
+        }
+        
+        /**
          * Collect form data and convert to API format
          */
         function collectFormData() {
             // Get cart items
             const cartInputs = document.querySelectorAll('#cartItems input[type="text"]');
             const cart = Array.from(cartInputs)
-                .map(input => input.value.trim())
+                .map(input => sanitizeInput(input.value))
                 .filter(item => item);
             
             if (cart.length === 0) {
@@ -437,7 +612,7 @@
                 const nameInput = section.querySelector('.vendor-header input[type="text"]');
                 const shippingInput = section.querySelector('.vendor-header input[type="number"]');
                 
-                const name = nameInput.value.trim();
+                const name = sanitizeInput(nameInput.value);
                 const shipping = parseFloat(shippingInput.value) || 0;
                 
                 if (!name) return; // Skip vendors without names
@@ -468,6 +643,61 @@
             }
             
             return { cart, vendors };
+        }
+        
+        /**
+         * Calculate comparison data for all vendors
+         */
+        function calculateComparisons(cart, vendors, optimalTotal) {
+            const comparisons = [];
+            
+            vendors.forEach(vendor => {
+                let totalItems = 0;
+                let availableItems = 0;
+                
+                cart.forEach(item => {
+                    if (vendor.items[item] !== undefined) {
+                        totalItems += vendor.items[item];
+                        availableItems++;
+                    }
+                });
+                
+                // Only show comparison if vendor has all items
+                if (availableItems === cart.length) {
+                    const total = totalItems + vendor.shipping;
+                    comparisons.push({
+                        name: vendor.name,
+                        itemsTotal: totalItems,
+                        shipping: vendor.shipping,
+                        total: total
+                    });
+                }
+            });
+            
+            // Sort by total cost
+            comparisons.sort((a, b) => a.total - b.total);
+            
+            return comparisons;
+        }
+        
+        /**
+         * Highlight selected vendors in the UI
+         */
+        function highlightSelectedVendors(selection) {
+            // Reset all vendor sections
+            const vendorSections = document.querySelectorAll('.vendor-section');
+            vendorSections.forEach(section => {
+                section.classList.remove('selected-vendor');
+            });
+            
+            // Highlight selected vendors
+            const selectedVendors = new Set(Object.values(selection));
+            vendorSections.forEach(section => {
+                const vendorName = section.querySelector('.vendor-header input[type="text"]').value.trim();
+                if (selectedVendors.has(vendorName)) {
+                    section.classList.add('selected-vendor');
+                }
+            });
         }
         
         /**
@@ -504,24 +734,80 @@
                     throw new Error(result.error || 'Failed to calculate best deal');
                 }
                 
+                // Highlight selected vendors
+                highlightSelectedVendors(result.selection);
+                
+                // Calculate comparisons
+                const comparisons = calculateComparisons(data.cart, data.vendors, result.cheapest_total);
+                
                 // Display success result
                 resultDiv.className = 'result success';
                 resultHeader.innerHTML = '🎉 Best Deal Found!';
                 
                 let content = `
                     <div style="font-size: 1.3em; font-weight: bold; margin-bottom: 10px;">
-                        💰 Cheapest Total: $${result.cheapest_total.toFixed(2)}
+                        💰 Optimal Total: $${result.cheapest_total.toFixed(2)}
                     </div>
                 `;
                 
                 content += '<div class="selection-list">';
-                content += '<strong>📦 Vendor Selection:</strong><br>';
+                content += '<strong>📦 Optimal Vendor Selection:</strong><br>';
                 
                 for (const [item, vendor] of Object.entries(result.selection)) {
-                    content += `<div style="margin: 5px 0;">• ${item} → ${vendor}</div>`;
+                    content += `<div style="margin: 5px 0;">• ${item} → <strong>${vendor}</strong></div>`;
                 }
                 
                 content += '</div>';
+                
+                // Add comparison table
+                if (comparisons.length > 1) {
+                    content += '<div class="comparison-table">';
+                    content += '<strong>📊 Vendor Comparison (if buying all from one vendor):</strong><br><br>';
+                    
+                    comparisons.forEach(comp => {
+                        const isOptimal = comp.total === Math.min(...comparisons.map(c => c.total));
+                        content += `
+                            <div class="comparison-row">
+                                <span class="vendor-name">${comp.name}:</span>
+                                <span class="vendor-total">$${comp.total.toFixed(2)} 
+                                    <small>(items: $${comp.itemsTotal.toFixed(2)} + shipping: $${comp.shipping.toFixed(2)})</small>
+                                    ${isOptimal && comp.total > result.cheapest_total ? '<span class="optimal-badge">Cheapest Single Vendor</span>' : ''}
+                                </span>
+                            </div>
+                        `;
+                    });
+                    
+                    content += `
+                        <div class="comparison-row">
+                            <span class="vendor-name">✅ Optimal Mix:</span>
+                            <span class="vendor-total">$${result.cheapest_total.toFixed(2)} <span class="optimal-badge">BEST</span></span>
+                        </div>
+                    `;
+                    
+                    content += '</div>';
+                }
+                
+                // Add savings alert if significant
+                const cheapestSingleVendor = Math.min(...comparisons.map(c => c.total));
+                const savings = cheapestSingleVendor - result.cheapest_total;
+                
+                if (savings > 0.01) {
+                    content += `
+                        <div class="savings-alert">
+                            💡 <strong>Smart Shopping Alert:</strong> You're saving $${savings.toFixed(2)} compared to buying everything from a single vendor!
+                        </div>
+                    `;
+                } else if (comparisons.length > 1) {
+                    const maxVendorCost = Math.max(...comparisons.map(c => c.total));
+                    const totalSavings = maxVendorCost - result.cheapest_total;
+                    if (totalSavings > 5) {
+                        content += `
+                            <div class="savings-alert">
+                                💡 <strong>Pro Tip:</strong> You're saving $${totalSavings.toFixed(2)} compared to the most expensive vendor!
+                            </div>
+                        `;
+                    }
+                }
                 
                 resultContent.innerHTML = content;
                 resultDiv.style.display = 'block';
