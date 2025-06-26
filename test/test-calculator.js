@@ -45,7 +45,7 @@ function runTests() {
     // Test 1: Basic calculation
     console.log('Test 1: Basic Best Deal Calculation');
     const result = calculateBestDeal(testCart, testVendors);
-    console.log('✅ Result:', result);
+    console.log('Result:', result);
     console.log('Expected: Laptop from BudgetTech, Mouse from ElectroMart, Keyboard from ElectroMart');
     console.log('Total should be: 880 + 28 + 65 + 25 + 15 = 1013\n');
     
