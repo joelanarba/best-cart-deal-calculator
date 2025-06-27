@@ -1,0 +1,385 @@
+// API endpoint - dynamically uses current protocol for localhost
+const API_URL = window.location.hostname === 'localhost' 
+    ? `${window.location.protocol}//localhost:3000/best-deal`
+    : 'https://best-cart-deal-calculator.onrender.com/best-deal';
+
+
+/**
+ * Add a new cart item input field
+ */
+function addCartItem() {
+    const cartItems = document.getElementById('cartItems');
+    const itemRow = document.createElement('div');
+    itemRow.className = 'item-row';
+    itemRow.innerHTML = `
+        <input type="text" placeholder="Enter item name...">
+        <button class="btn btn-remove" onclick="removeCartItem(this)">❌</button>
+    `;
+    cartItems.appendChild(itemRow);
+    updateVendorItems();
+}
+
+/**
+ * Remove a cart item
+ */
+function removeCartItem(button) {
+    button.parentElement.remove();
+    updateVendorItems();
+}
+
+/**
+ * Clear all cart items
+ */
+function clearAllItems() {
+    const cartItems = document.getElementById('cartItems');
+    cartItems.innerHTML = '';
+    addCartItem(); // Add one empty item
+    updateVendorItems();
+}
+
+/**
+ * Add a new vendor section
+ */
+function addVendor() {
+    const vendors = document.getElementById('vendors');
+    const vendorSection = document.createElement('div');
+    vendorSection.className = 'vendor-section';
+    vendorSection.innerHTML = `
+        <div class="vendor-header">
+            <input type="text" placeholder="Vendor name..." style="flex: 2;">
+            <input type="number" placeholder="Shipping fee..." min="0" step="0.01" style="flex: 1;">
+            <button class="btn btn-remove" onclick="removeVendor(this)">❌</button>
+        </div>
+        <div class="vendor-items"></div>
+    `;
+    vendors.appendChild(vendorSection);
+    updateVendorItems();
+}
+
+/**
+ * Remove a vendor
+ */
+function removeVendor(button) {
+    button.closest('.vendor-section').remove();
+}
+
+/**
+ * Clear all vendors
+ */
+function clearAllVendors() {
+    const vendors = document.getElementById('vendors');
+    vendors.innerHTML = '';
+    addVendor(); // Add one empty vendor
+}
+
+/**
+ * Update vendor item price inputs based on cart items
+ */
+function updateVendorItems() {
+    // Get all cart items
+    const cartInputs = document.querySelectorAll('#cartItems input[type="text"]');
+    const items = Array.from(cartInputs).map(input => input.value.trim()).filter(item => item);
+    
+    // Update each vendor's item inputs
+    const vendorSections = document.querySelectorAll('.vendor-section');
+    vendorSections.forEach(section => {
+        const vendorItems = section.querySelector('.vendor-items');
+        const existingInputs = {};
+        
+        // Save existing values
+        const existingPriceInputs = vendorItems.querySelectorAll('input[type="number"]');
+        existingPriceInputs.forEach(input => {
+            const itemName = input.previousElementSibling.textContent;
+            existingInputs[itemName] = input.value;
+        });
+        
+        // Clear and rebuild
+        vendorItems.innerHTML = '';
+        
+        items.forEach(item => {
+            const vendorItem = document.createElement('div');
+            vendorItem.className = 'vendor-item';
+            vendorItem.innerHTML = `
+                <span>${item}:</span>
+                <input type="number" placeholder="Price" min="0" step="0.01" value="${existingInputs[item] || ''}">
+            `;
+            vendorItems.appendChild(vendorItem);
+        });
+    });
+}
+
+/**
+ * Sanitize and validate input data
+ */
+function sanitizeInput(str) {
+    return str.trim().replace(/[<>]/g, '');
+}
+
+/**
+ * Collect form data and convert to API format
+ */
+function collectFormData() {
+    // Get cart items
+    const cartInputs = document.querySelectorAll('#cartItems input[type="text"]');
+    const cart = Array.from(cartInputs)
+        .map(input => sanitizeInput(input.value))
+        .filter(item => item);
+    
+    if (cart.length === 0) {
+        throw new Error('Please add at least one item to your cart');
+    }
+    
+    // Get vendors
+    const vendors = [];
+    const vendorSections = document.querySelectorAll('.vendor-section');
+    
+    vendorSections.forEach(section => {
+        const nameInput = section.querySelector('.vendor-header input[type="text"]');
+        const shippingInput = section.querySelector('.vendor-header input[type="number"]');
+        
+        const name = sanitizeInput(nameInput.value);
+        const shipping = parseFloat(shippingInput.value) || 0;
+        
+        if (!name) return; // Skip vendors without names
+        
+        const items = {};
+        const itemInputs = section.querySelectorAll('.vendor-items input[type="number"]');
+        itemInputs.forEach(input => {
+            const itemName = input.previousElementSibling.textContent.replace(':', '');
+            const price = parseFloat(input.value);
+            if (!isNaN(price) && price >= 0) {
+                items[itemName] = price;
+            }
+        });
+        
+        vendors.push({ name, shipping, items });
+    });
+    
+    if (vendors.length === 0) {
+        throw new Error('Please add at least one vendor with prices');
+    }
+    
+    // Check if all cart items have at least one vendor price
+    for (const item of cart) {
+        const hasPrice = vendors.some(vendor => vendor.items[item] !== undefined);
+        if (!hasPrice) {
+            throw new Error(`Item "${item}" has no price from any vendor`);
+        }
+    }
+    
+    return { cart, vendors };
+}
+
+/**
+ * Calculate comparison data for all vendors
+ */
+function calculateComparisons(cart, vendors, optimalTotal) {
+    const comparisons = [];
+    
+    vendors.forEach(vendor => {
+        let totalItems = 0;
+        let availableItems = 0;
+        
+        cart.forEach(item => {
+            if (vendor.items[item] !== undefined) {
+                totalItems += vendor.items[item];
+                availableItems++;
+            }
+        });
+        
+        // Only show comparison if vendor has all items
+        if (availableItems === cart.length) {
+            const total = totalItems + vendor.shipping;
+            comparisons.push({
+                name: vendor.name,
+                itemsTotal: totalItems,
+                shipping: vendor.shipping,
+                total: total
+            });
+        }
+    });
+    
+    // Sort by total cost
+    comparisons.sort((a, b) => a.total - b.total);
+    
+    return comparisons;
+}
+
+/**
+ * Highlight selected vendors in the UI
+ */
+function highlightSelectedVendors(selection) {
+    // Reset all vendor sections
+    const vendorSections = document.querySelectorAll('.vendor-section');
+    vendorSections.forEach(section => {
+        section.classList.remove('selected-vendor');
+    });
+    
+    // Highlight selected vendors
+    const selectedVendors = new Set(Object.values(selection));
+    vendorSections.forEach(section => {
+        const vendorName = section.querySelector('.vendor-header input[type="text"]').value.trim();
+        if (selectedVendors.has(vendorName)) {
+            section.classList.add('selected-vendor');
+        }
+    });
+}
+
+/**
+ * Calculate the best deal
+ */
+async function calculateBestDeal() {
+    const resultDiv = document.getElementById('result');
+    const resultHeader = document.getElementById('resultHeader');
+    const resultContent = document.getElementById('resultContent');
+    const loading = document.getElementById('loading');
+    const calculateBtn = document.querySelector('.btn-calculate');
+    
+    // Hide previous results and show loading
+    resultDiv.style.display = 'none';
+    loading.style.display = 'block';
+    calculateBtn.disabled = true;
+    
+    try {
+        // Collect and validate form data
+        const data = collectFormData();
+        
+        // Make API call
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to calculate best deal');
+        }
+        
+        // Highlight selected vendors
+        highlightSelectedVendors(result.selection);
+        
+        // Calculate comparisons
+        const comparisons = calculateComparisons(data.cart, data.vendors, result.cheapest_total);
+        
+        // Display success result
+        resultDiv.className = 'result success';
+        resultHeader.innerHTML = '🎉 Best Deal Found!';
+        
+        let content = `
+            <div style="font-size: 1.3em; font-weight: bold; margin-bottom: 10px;">
+                💰 Optimal Total: $${result.cheapest_total.toFixed(2)}
+            </div>
+        `;
+        
+        content += '<div class="selection-list">';
+        content += '<strong>📦 Optimal Vendor Selection:</strong><br>';
+        
+        for (const [item, vendor] of Object.entries(result.selection)) {
+            content += `<div style="margin: 5px 0;">• ${item} → <strong>${vendor}</strong></div>`;
+        }
+        
+        content += '</div>';
+        
+        // Add comparison table
+        if (comparisons.length > 1) {
+            content += '<div class="comparison-table">';
+            content += '<strong>📊 Vendor Comparison (if buying all from one vendor):</strong><br><br>';
+            
+            comparisons.forEach(comp => {
+                const isOptimal = comp.total === Math.min(...comparisons.map(c => c.total));
+                content += `
+                    <div class="comparison-row">
+                        <span class="vendor-name">${comp.name}:</span>
+                        <span class="vendor-total">$${comp.total.toFixed(2)} 
+                            <small>(items: $${comp.itemsTotal.toFixed(2)} + shipping: $${comp.shipping.toFixed(2)})</small>
+                            ${isOptimal && comp.total > result.cheapest_total ? '<span class="optimal-badge">Cheapest Single Vendor</span>' : ''}
+                        </span>
+                    </div>
+                `;
+            });
+            
+            content += `
+                <div class="comparison-row">
+                    <span class="vendor-name">✅ Optimal Mix:</span>
+                    <span class="vendor-total">$${result.cheapest_total.toFixed(2)} <span class="optimal-badge">BEST</span></span>
+                </div>
+            `;
+            
+            content += '</div>';
+        }
+        
+        // Add savings alert if significant
+        const cheapestSingleVendor = Math.min(...comparisons.map(c => c.total));
+        const savings = cheapestSingleVendor - result.cheapest_total;
+        
+        if (savings > 0.01) {
+            content += `
+                <div class="savings-alert">
+                    💡 <strong>Smart Shopping Alert:</strong> You're saving $${savings.toFixed(2)} compared to buying everything from a single vendor!
+                </div>
+            `;
+        } else if (comparisons.length > 1) {
+            const maxVendorCost = Math.max(...comparisons.map(c => c.total));
+            const totalSavings = maxVendorCost - result.cheapest_total;
+            if (totalSavings > 5) {
+                content += `
+                    <div class="savings-alert">
+                        💡 <strong>Pro Tip:</strong> You're saving $${totalSavings.toFixed(2)} compared to the most expensive vendor!
+                    </div>
+                `;
+            }
+        }
+        
+        resultContent.innerHTML = content;
+        resultDiv.style.display = 'block';
+        
+    } catch (error) {
+        // Display error
+        resultDiv.className = 'result error';
+        resultHeader.innerHTML = '❌ Error';
+        resultContent.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        resultDiv.style.display = 'block';
+        
+        console.error('Error:', error);
+    } finally {
+        // Hide loading and re-enable button
+        loading.style.display = 'none';
+        calculateBtn.disabled = false;
+    }
+}
+
+// Initialize vendor items when page loads
+window.addEventListener('load', function() {
+    updateVendorItems();
+    
+    // Add some example prices
+    const vendorSections = document.querySelectorAll('.vendor-section');
+    if (vendorSections.length >= 2) {
+        // TechStore prices
+        const techStoreInputs = vendorSections[0].querySelectorAll('.vendor-items input[type="number"]');
+        if (techStoreInputs.length >= 3) {
+            techStoreInputs[0].value = '899'; // Laptop
+            techStoreInputs[1].value = '35';  // Mouse
+            techStoreInputs[2].value = '75';  // Keyboard
+        }
+        
+        // ElectroMart prices
+        const electroInputs = vendorSections[1].querySelectorAll('.vendor-items input[type="number"]');
+        if (electroInputs.length >= 3) {
+            electroInputs[0].value = '950'; // Laptop
+            electroInputs[1].value = '28';  // Mouse
+            electroInputs[2].value = '65';  // Keyboard
+        }
+    }
+});
+
+// Update vendor items when cart items change
+document.getElementById('cartItems').addEventListener('input', function(e) {
+    if (e.target.type === 'text') {
+        setTimeout(updateVendorItems, 100); // Small delay to allow input to update
+    }
+});
